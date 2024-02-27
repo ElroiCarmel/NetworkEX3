@@ -3,6 +3,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <string.h>
+#include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <stdlib.h>
 #include <time.h>
@@ -14,6 +15,24 @@ char *util_generate_random_data(unsigned int size);
 
 int main(int argc, char *argv[])
 {
+    int server_port; char cc_algo[16] = {0}, server_ip[16] = {0};
+
+    if (argc != 7) {
+        printf("Error! Usage of program is '-ip' <IP> '-p' <PORT> '-algo' <ALGO>\n");
+        return 1;
+    }
+
+    strcpy(server_ip, argv[2]);
+    server_port = atoi(argv[4]);
+    if (server_port == 0) {
+        fprintf(stdout, "Error! port sytnax failure...\n");
+        return 1;
+    }
+    // if (argv[6] != "reno" && argv[4] != "cubic") {
+    //     fprintf(stdout, "Error! Allowed <ALGO> are only 'cubic' or 'reno'\n");
+    //     return 1;
+    // }
+    strcpy(cc_algo, argv[6]);
 
     unsigned int file_size = 1 << 21;
 
@@ -30,17 +49,24 @@ int main(int argc, char *argv[])
         perror("socket(2)");
         return 1;
     }
-
-    if (inet_pton(AF_INET, SERVER_IP, &server.sin_addr) < 0) {
+    if (inet_pton(AF_INET, server_ip, &server.sin_addr) < 0) {
         perror("inet_pton(3)");
+        close(sock);
+        return 1;
+    }
+    
+    // Setting Congestion Control algorithm
+
+    if (setsockopt(sock, IPPROTO_TCP, TCP_CONGESTION, cc_algo, strlen(cc_algo)) < 0) {
+        perror("setsockopt(2)");
         close(sock);
         return 1;
     }
 
     server.sin_family = AF_INET;
-    server.sin_port = htons(SERVER_PORT);
+    server.sin_port = htons(server_port);
 
-    fprintf(stdout, "Connecting to Receiver: %s:%d...\n", SERVER_IP, SERVER_PORT);
+    fprintf(stdout, "Connecting to Receiver: %s:%d...\n", server_ip, server_port);
 
     if (connect(sock, (struct sockaddr *) &server, sizeof(server)) < 0) {
         perror("connect(2)");

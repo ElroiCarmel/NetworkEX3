@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <netinet/tcp.h>
+#include <netinet/in.h>
 #include <stdlib.h>
 #include <time.h>
 
@@ -11,6 +12,23 @@
 #define BUFF_SIZE 1024
 
 int main(int argc, char* argv[]) {
+
+    int port; char cc_algo[16] = {0};
+    if (argc != 5) {
+        printf("Error! Usage of program is '-p' <PORT> '-algo' <ALGO>\n");
+        return 1;
+    }
+    port = atoi(argv[2]);
+    if (port == 0) {
+        fprintf(stdout, "Error! port sytnax failure...\n");
+        return 1;
+    }
+    // if (argv[4] != "reno" && argv[4] != "cubic") {
+    //     fprintf(stdout, "Error! Allowed <ALGO> are only 'cubic' or 'reno'\n");
+    //     return 1;
+    // }
+    
+    strcpy(cc_algo, argv[4]);
 
     struct sockaddr_in client;
     struct sockaddr_in server;
@@ -38,9 +56,16 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // Setting Congestion Control algorithm
+    if (setsockopt(sock, IPPROTO_TCP, TCP_CONGESTION, cc_algo, strlen(cc_algo)) < 0) {
+        perror("setsockopt(2)");
+        close(sock);
+        return 1;
+    }
+
     server.sin_addr.s_addr = INADDR_ANY;
     server.sin_family = AF_INET;
-    server.sin_port = htons(SERVER_PORT);
+    server.sin_port = htons(port);
 
     if (bind(sock, (struct sockaddr *)&server, sizeof(server)) < 0)
     {
@@ -56,7 +81,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    fprintf(stdout, "Listening for incoming connections on port %d...\n", SERVER_PORT);
+    fprintf(stdout, "Listening for incoming connections on port %d...\n", port);
     /*
     For saving the statistics data.
     Time in seconds, btyes in bytes
