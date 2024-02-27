@@ -18,11 +18,11 @@ int main(int argc, char *argv[])
     unsigned int file_size = 1 << 21;
 
     int option = 1; // For user choice whether send another file
-
     
     struct sockaddr_in server;
-
     memset(&server, 0, sizeof(server));
+
+    //Create the socket
 
     int sock = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -38,10 +38,9 @@ int main(int argc, char *argv[])
     }
 
     server.sin_family = AF_INET;
-
     server.sin_port = htons(SERVER_PORT);
 
-    fprintf(stdout, "Connecting to %s:%d...\n", SERVER_IP, SERVER_PORT);
+    fprintf(stdout, "Connecting to Receiver: %s:%d...\n", SERVER_IP, SERVER_PORT);
 
     if (connect(sock, (struct sockaddr *) &server, sizeof(server)) < 0) {
         perror("connect(2)");
@@ -49,18 +48,19 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    fprintf(stdout, "Successfully connected to the server!\n");
-    do {
+    //Generate random file
+    char* random_file = util_generate_random_data(file_size);
+    if (random_file == NULL) {
+        fprintf(stdout, "Out of memory!..\n");
+        return 1;
+    }
 
+    
+    fprintf(stdout, "Successfully connected to Reciever!\n");
+    do {
+        
         fprintf(stdout, "Sending random file to server...\n");
         
-        char* random_file = util_generate_random_data(file_size);
-
-        if (random_file == NULL) {
-            fprintf(stdout, "Out of memory!..\n");
-            return 1;
-        }
-
         int bytes_sent = send(sock, random_file, file_size, 0);
 
         if (bytes_sent <= 0) {
@@ -70,17 +70,16 @@ int main(int argc, char *argv[])
             return 1;
         }
 
-        fprintf(stdout, "Sent %d bytes to the server!\n", bytes_sent);
+        fprintf(stdout, "File transfer complete! Sent %d bytes to the server!\n", bytes_sent);
 
-        fprintf(stdout, "Enter 1 to send another random file, 0 to exit\n");
+        fprintf(stdout, "\nEnter 1 to send the random file again, 0 to exit: ");
 
         scanf("%d", &option);
 
-        free(random_file);
-    } while (option !=0 );
-    
+        
+    } while (option != 0);
+    free(random_file);
     close(sock);
-
     fprintf(stdout, "Connection closed...\n");
     return 0;
 }
