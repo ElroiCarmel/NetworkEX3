@@ -179,6 +179,53 @@ int rudp_accept(RUDP_Socket* sockfd, char* buff, int buff_size) {
 
 }
 
+int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
+    if (sockfd->isConnected == 0) return 0;
+    // Deal with FIN packet
+    struct sockaddr_in recv_addr;
+    socklen_t recv_addr_s = sizeof(recv_addr);
+    int bytes_recv = recvfrom(sockfd->socket_fd, buffer, buffer_size, 0, (struct sockaddr*)&recv_addr, &recv_addr_s);
+    if (bytes_recv < 0) {
+        perror("recvfrom(2)");
+        close(sockfd->socket_fd);
+        return -1;
+    }
+
+    RUDP_Header* recv_header = (RUDP_Header*) buffer;
+    if (recv_header->flags & FIN) {
+        rudp_disconnect(sockfd);
+        return 0;
+    }
+
+    unsigned short mess_len = recv_header->length;
+    if (mess_len) {
+        char* data = (char*) ++recv_header;
+        // calculate checksum to check for data-integrity
+        unsigned short checksum = calculate_checksum(data, mess_len);
+        if (checksum == recv_header->checksum) {
+            // send ACK
+            RUDP_Header ack_header;
+            memset(&ack_header, 0, sizeof(ack_header));
+            ack_header.flags |= ACK;
+
+            size_t ack_pack_s;
+            const char *ack_pack = packet_alloc(&ack_header, NULL, &ack_pack_s);
+            int bytes_sent = sendto(sockfd->socket_fd, ack_pack, ack_pack_s, 0,(struct sockaddr*) &(sockfd->dest_adrr), sizeof(sockfd->dest_adrr));
+            if (bytes_sent < 0) {
+                perror("sendto(2)");
+                close(sockfd->socket_fd);
+                exit(1);
+            }
+            free((void*)ack_pack);
+        }
+    }
+    return mess_len;
+}
+
+
+
+
+
 const char* packet_alloc(RUDP_Header* header, char* data, size_t* pack_size) {
     const char * ans = (const char *) calloc(1, sizeof(RUDP_Header) + header->length);
     memcpy((char*)ans, header, sizeof(RUDP_Header));
@@ -190,4 +237,19 @@ const char* packet_alloc(RUDP_Header* header, char* data, size_t* pack_size) {
     return ans;
 }
 
-
+unsigned short int calculate_checksum(void *data, unsigned int bytes) {
+    unsigned short int *data_pointer = (unsigned short int *)data;
+    unsigned int total_sum = 0;
+    // Main summing loop
+    while (bytes > 1) {
+        total_sum += *data_pointer++;
+        bytes -= 2;
+        }
+    // Add left-over byte, if any
+    if (bytes > 0)
+    total_sum += *((unsigned char *)data_pointer);
+    // Fold 32-bit sum to 16 bits
+    while (total_sum >> 16)
+    total_sum = (total_sum & 0xFFFF) + (total_sum >> 16);
+    return (~((unsigned short int)total_sum));
+}

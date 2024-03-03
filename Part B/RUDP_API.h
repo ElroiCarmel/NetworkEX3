@@ -36,10 +36,24 @@ int rudp_connect(RUDP_Socket* sockfd, const char * dest_ip, unsigned short dest_
 /* Accepts incoming connection request and completes the handshake, returns 0 on failure and 1 on success. Fails if called when the socket is connected/set to client. */
 int rudp_accept(RUDP_Socket* sockfd, char* buff, int buff_size);
 
+// Receives data from the other side and put it into the buffer. Returns the number of received bytes on success, 0 if got FIN packet (disconnect), and -1 on error. Fails if called when the socket is disconnected.
+int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size);
+
+
+
+// Disconnects from an actively connected socket. Returns 1 on success, 0 when the socket is already disconnected (failure).
+int rudp_disconnect(RUDP_Socket *sockfd);
 
 /*  Pack a header and a time to one byte-sequence starting in address dest. 
     If data is NULL there's only header to send so return header.*/
 const char* packet_alloc(RUDP_Header* header, char* data, size_t* pack_size);
 
+/*
+* @brief A checksum function that returns 16 bit checksum for data.
+* @param data The data to do the checksum for.
+* @param bytes The length of the data in bytes.
+* @return The checksum itself as 16 bit unsigned number.
+*/
+unsigned short int calculate_checksum(void *data, unsigned int bytes);
 
 #endif
