@@ -23,11 +23,7 @@ int main(int argc, char* argv[]) {
         fprintf(stdout, "Error! port sytnax failure...\n");
         return 1;
     }
-    // if (argv[4] != "reno" && argv[4] != "cubic") {
-    //     fprintf(stdout, "Error! Allowed <ALGO> are only 'cubic' or 'reno'\n");
-    //     return 1;
-    // }
-    
+   
     strcpy(cc_algo, argv[4]);
 
     struct sockaddr_in client;
@@ -154,7 +150,7 @@ int main(int argc, char* argv[]) {
                     // Deal with statistics
                     double t = (double) (clock() - start) / CLOCKS_PER_SEC;
                     time_storage[strg_size] = t * 1e3; //  save in ms
-                    speed_storage[strg_size] = (double) (total_recv / t)/1e6; //save in MB/s
+                    speed_storage[strg_size] = (double) (total_recv / t)/ (1024.0*1024.0); //save in MB/s
                     strg_size++;
                     fprintf(stdout, "File transfer completed, %lf bytes received\n", (double) total_recv);
                     fprintf(stdout, "Time for receiveing file: %lf ms\n", t*1000);
@@ -169,26 +165,25 @@ int main(int argc, char* argv[]) {
         //Sender probably closed the conncetion
         fprintf(stdout, "Sender sent exit message...\n");
         fprintf(stdout, "Sender %s:%d disconnected\n", inet_ntoa(client.sin_addr), ntohs(client.sin_port));
-        //Print stattitics
-        fprintf(stdout, "***************************************\n");
-        size_t i;
-        double time_sum = 0, speed_sum = 0;
-        for (i = 0; i < strg_size; i++) {
-            double t = time_storage[i];
-            double speed = speed_storage[i];
-            fprintf(stdout, "Run #%ld Data:     Time = %.4lfms, Speed: %.2lfMB/s\n", i, t, speed);
-            time_sum += t; speed_sum += speed;
-        }
-        fprintf(stdout, "Average time: %.4lf ms\nAverage speed: %.2lf MB/s\n", time_sum/strg_size, speed_sum/strg_size);
+        
         // Close the connection
         close(client_socket);
         
         break;
     }
     
-    //print stats
-
-
+    
+    //Print stattitics
+    fprintf(stdout, "***************************************\n");
+    size_t i;
+    double time_sum = 0, speed_sum = 0;
+    for (i = 0; i < strg_size; i++) {
+        double t = time_storage[i];
+        double speed = speed_storage[i];
+        fprintf(stdout, "Run #%ld Data:     Time = %.4lfms, Speed: %.2lfMB/s\n", i, t, speed);
+        time_sum += t; speed_sum += speed;
+    }
+    fprintf(stdout, "Average time: %.4lf ms\nAverage speed: %.2lf MB/s\n", time_sum/strg_size, speed_sum/strg_size);
     close(sock);
     free(speed_storage); free(time_storage);
     fprintf(stdout, "Server finished!\n");

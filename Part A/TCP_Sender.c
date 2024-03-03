@@ -28,20 +28,18 @@ int main(int argc, char *argv[])
         fprintf(stdout, "Error! port sytnax failure...\n");
         return 1;
     }
-    // if (argv[6] != "reno" && argv[4] != "cubic") {
-    //     fprintf(stdout, "Error! Allowed <ALGO> are only 'cubic' or 'reno'\n");
-    //     return 1;
-    // }
+   
     strcpy(cc_algo, argv[6]);
 
     unsigned int file_size = 1 << 21;
 
     int option = 1; // For user choice whether send another file
     
-    struct sockaddr_in server;
-    memset(&server, 0, sizeof(server));
+    
 
     //Create the socket
+    struct sockaddr_in server;
+    memset(&server, 0, sizeof(server));
 
     int sock = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -74,16 +72,14 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    //Generate random file
+    fprintf(stdout, "Successfully connected to Reciever!\n");
+    do {
+        // Generate random file
     char* random_file = util_generate_random_data(file_size);
     if (random_file == NULL) {
         fprintf(stdout, "Out of memory!..\n");
         return 1;
     }
-
-    
-    fprintf(stdout, "Successfully connected to Reciever!\n");
-    do {
         
         fprintf(stdout, "Sending random file to server...\n");
         
@@ -101,10 +97,10 @@ int main(int argc, char *argv[])
         fprintf(stdout, "\nEnter 1 to send the random file again, 0 to exit: ");
 
         scanf("%d", &option);
-
+ free(random_file);
         
     } while (option != 0);
-    free(random_file);
+   
     close(sock);
     fprintf(stdout, "Connection closed...\n");
     return 0;
