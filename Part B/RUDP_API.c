@@ -117,6 +117,7 @@ int rudp_connect(RUDP_Socket* sockfd, const char * dest_ip, unsigned short dest_
     byte_sent = sendto(sockfd->socket_fd, ack_packet, ack_pack_s, 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
     if (byte_sent < 0) {
         perror("sendto(2)");
+        free((char*)sin_packet); free((char*)ack_packet);
         close(sockfd->socket_fd);
         exit(1);
     }
@@ -193,7 +194,7 @@ int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
 
     RUDP_Header* recv_header = (RUDP_Header*) buffer;
     if (recv_header->flags & FIN) {
-        rudp_disconnect(sockfd);
+        rudp_disconnect(sockfd); // Continue the connection closing scheme
         return 0;
     }
 
@@ -223,8 +224,89 @@ int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
 }
 
 
+int rudp_send(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
+    if (sockfd->isConnected == 0) return -1;
+    const size_t MAX_LEN = MAX_DGRAM_SIZE - sizeof(RUDP_Header);
+    // If data too large divide it to smaller chunks
+    int total_sent = 0;
+    for (char* data_start = (char*)buffer; data_start < (char*)buffer + buffer_size; data_start+=MAX_LEN) {
+        // Create header
+        RUDP_Header mess_header;
+        memset(&mess_header, 0, sizeof(mess_header));
+        if (data_start == buffer) {
+            mess_header.flags |= STOF; // Turn on start of file
+        }
+        if (data_start + MAX_LEN >= (char*)buffer+buffer_size) {
+            mess_header.flags |= ENOF; // Turn on end of file
+        }
+        int end_to_current_start = (char*)buffer+buffer_size - data_start;
+        mess_header.length = (end_to_current_start < MAX_LEN) ? end_to_current_start : MAX_LEN;
+        mess_header.checksum = calculate_checksum(data_start, mess_header.length);
+
+        size_t pack_size;
+        const char* to_send = packet_alloc(&mess_header, data_start, &pack_size);
+        // remember to free after ack received!
+        int is_acked = 0;
+        while (is_acked == 0) {
+            int bytes_sent = sendto(sockfd->socket_fd, to_send, pack_size, 0, (struct sockaddr*) &(sockfd->dest_adrr), sizeof(sockfd->dest_adrr));
+            if (bytes_sent < 0) {
+                perror("sendto(2)");
+                close(sockfd->socket_fd);
+                free((char*)to_send);
+                exit(1);
+            }
+        
+            // Wait for ACK
+            struct sockaddr_in recv_addr;
+            socklen_t recv_addr_s = sizeof(recv_addr);
+            int bytes_recv = recvfrom(sockfd->socket_fd, buffer, buffer_size, 0, (struct sockaddr*)&recv_addr, &recv_addr_s);
+            if (bytes_recv < 0) {
+                if (errno == EWOULDBLOCK || errno == EAGAIN) {
+                    fprintf(stdout, "Time out ocurred!\n");
+                } else {
+                perror("recvfrom(2)");
+                close(sockfd->socket_fd);
+                free((void*)to_send);
+                return -1;
+                }
+            }
+            else if (bytes_recv > 0) {
+                RUDP_Header* recv_header = (RUDP_Header* ) buffer;
+                if (recv_header->flags & ACK) {
+                    is_acked = 1;
+                    total_sent += mess_header.length;
+                    free((void*)to_send);
+                }
+            }
+        }
+    }
+    return total_sent;
+}
 
 
+int rudp_disconnect(RUDP_Socket *sockfd) {
+    if (sockfd->isConnected == 0) return 0;
+    if (sockfd->isServer) {
+        // Send FIN+ACK
+        RUDP_Header mess_header;
+        memset(&mess_header, 0, sizeof(mess_header));
+        mess_header.flags = FIN | ACK;
+
+        size_t pack_size;
+        const char* packet = packet_alloc(&mess_header, NULL, &pack_size);
+
+        
+        // Wait for ACK from client
+        
+
+    } else {
+        // Send FIN
+
+        // Wait for FIN+ACK from server
+
+        // Send ACK
+    }
+}
 
 const char* packet_alloc(RUDP_Header* header, char* data, size_t* pack_size) {
     const char * ans = (const char *) calloc(1, sizeof(RUDP_Header) + header->length);
@@ -252,4 +334,19 @@ unsigned short int calculate_checksum(void *data, unsigned int bytes) {
     while (total_sum >> 16)
     total_sum = (total_sum & 0xFFFF) + (total_sum >> 16);
     return (~((unsigned short int)total_sum));
+}
+
+char *util_generate_random_data(unsigned int size) {
+    char *buffer = NULL;
+    // Argument check.
+    if (size == 0) return NULL;
+    buffer = (char *)calloc(size, sizeof(char));
+    // Error checking.
+    if (buffer == NULL)
+    return NULL;
+    // Randomize the seed of the random number generator.
+    srand(time(NULL));
+    for (unsigned int i = 0; i < size; i++)
+    *(buffer + i) = ((unsigned int)rand() % 256);
+    return buffer;
 }
