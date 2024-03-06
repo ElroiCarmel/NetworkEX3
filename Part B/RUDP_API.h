@@ -43,11 +43,14 @@ int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size);
 int rudp_send(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size);
 
 // Disconnects from an actively connected socket. Returns 1 on success, 0 when the socket is already disconnected (failure).
-int rudp_disconnect(RUDP_Socket *sockfd);
+int rudp_disconnect(RUDP_Socket *sockfd, char* buff, int buff_size);
 
 /*  Pack a header and a time to one byte-sequence starting in address dest. 
     If data is NULL there's only header to send so return header.*/
 const char* packet_alloc(RUDP_Header* header, char* data, size_t* pack_size);
+
+// Send a simple ACK packet. fails (return 0) if socket disconnected
+int RUDP_sendACK(RUDP_Socket* sockfd);
 
 /*
 * @brief A checksum function that returns 16 bit checksum for data.
