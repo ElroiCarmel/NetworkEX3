@@ -17,4 +17,4 @@ RUDP_Sender : RUDP_Sender.o RUDP_API.o
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 clean :
-	rm -f *.o $(TARGETS)
+	rm -f *.o *.txt $(TARGETS)

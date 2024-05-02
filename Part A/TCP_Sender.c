@@ -106,7 +106,7 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-/*
+/**
 * @brief A random data generator function based on srand() and rand().
 * @param size The size of the data to generate (up to 2^32 bytes).
 * @return A pointer to the buffer.

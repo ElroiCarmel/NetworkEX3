@@ -126,7 +126,7 @@ int main(int argc, char* argv[]) {
             }           
             else {
                 total_recv += bytes_recv;
-                if (total_recv >= expected_total) //Meaning file transfer completed
+                if (total_recv >= expected_total) // Meaning file transfer completed
                 {
                     
                     if (strg_size==strg_capacity)

@@ -1,18 +1,6 @@
 #include "RUDP_API.h"
 
-struct _rudp_socket {
-    int socket_fd; // UDP socket file descrriptor
-    int isServer; // True if the RUDP socket acts like a server, false if client
-    int isConnected; // True if the client connected to the server and vice versa
-    struct sockaddr_in dest_adrr; /* Destination address, Client fills it when it connects via rudp_connect()
-                                     server fills it when it receives connection via rudp_accept() */
-};
 
-struct _rudp_header {
-    unsigned short checksum; // Checksum for data integrity. Sender calculate checksum with data, Server receievs it and checks for data integrity
-    unsigned short length; // Length of the data without the header length
-    unsigned char flags;
-};
 
 RUDP_Socket* RUDP_Socket_alloc(int isServer, unsigned short listen_port, int sec_tout) {
     RUDP_Socket* sock = (RUDP_Socket*) calloc(1, sizeof(RUDP_Socket));
@@ -34,6 +22,15 @@ RUDP_Socket* RUDP_Socket_alloc(int isServer, unsigned short listen_port, int sec
         server_addr.sin_addr.s_addr = INADDR_ANY;
         server_addr.sin_family = AF_INET;
         server_addr.sin_port = htons(listen_port);
+
+        int opt = 1;
+        if (setsockopt(udp_sock, SOL_SOCKET,SO_REUSEADDR, &opt, sizeof(opt))< 0)
+            {
+                perror("setsockopt(2)");
+                close(udp_sock);
+                exit(1);      
+            }
+
         if (bind(udp_sock, (struct sockaddr*) &server_addr, sizeof(server_addr)) < 0) {
             perror("bind(2)");
             close(udp_sock);
@@ -42,8 +39,8 @@ RUDP_Socket* RUDP_Socket_alloc(int isServer, unsigned short listen_port, int sec
         sock->isServer = 1;
     }
     else {
-         struct timeval tv = {sec_tout, 0};
-         if (setsockopt(udp_sock, SOL_SOCKET, SO_RCVTIMEO, (char*) &tv, sizeof(tv)) == -1)
+        struct timeval sec = {sec_tout, 0};
+         if (setsockopt(udp_sock, SOL_SOCKET, SO_RCVTIMEO, (char*) &sec, sizeof(sec)) < 0)
             {
                 perror("setsockopt(2)");
                 close(udp_sock);
@@ -100,6 +97,7 @@ int rudp_connect(RUDP_Socket* sockfd, const char * dest_ip, unsigned short dest_
         }
     }
     
+    // Recieved answer
     RUDP_Header* recv_header = (RUDP_Header*) buff;
     int is_sin_ack = (recv_header->flags & SIN) && (recv_header->flags & ACK);
     if (is_sin_ack == 0) {
@@ -110,12 +108,14 @@ int rudp_connect(RUDP_Socket* sockfd, const char * dest_ip, unsigned short dest_
     fprintf(stdout, "Server replied with SYN+ACK!\n");
 
     
-    // Send ACK
-    RUDP_sendACK(sockfd);
+    
 
     // connect the udp and set isConnected to 1
     memcpy(&(sockfd->dest_adrr), &serv_addr, sizeof(serv_addr));
     sockfd->isConnected = 1;
+
+    // Send ACK
+    RUDP_sendACK(sockfd);
     return 1;
 }
 
@@ -182,13 +182,13 @@ int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
 
     RUDP_Header* recv_header = (RUDP_Header*) buffer;
     if (recv_header->flags & FIN) {
-        rudp_disconnect(sockfd, buffer, buffer_size); // Continue the connection closing scheme
+        rudp_disconnect(sockfd, (char*)buffer, buffer_size); // Continue the connection closing scheme
         return 0;
     }
 
     unsigned short mess_len = recv_header->length;
     if (mess_len) {
-        char* data = (char*) ++recv_header;
+        char* data = (char*) (recv_header+1);
         // calculate checksum to check for data-integrity
         unsigned short checksum = calculate_checksum(data, mess_len);
         if (checksum == recv_header->checksum) {
@@ -201,6 +201,7 @@ int rudp_recv(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
 
 
 int rudp_send(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
+
     if (sockfd->isConnected == 0) return -1;
     const size_t MAX_LEN = MAX_DGRAM_SIZE - sizeof(RUDP_Header);
     // If data too large divide it to smaller chunks
@@ -249,7 +250,7 @@ int rudp_send(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
                 }
             }
             else if (bytes_recv > 0) {
-                RUDP_Header* recv_header = (RUDP_Header* ) buffer;
+                RUDP_Header* recv_header = (RUDP_Header*) buffer;
                 if (recv_header->flags & ACK) {
                     is_acked = 1;
                     total_sent += mess_header.length;
@@ -262,7 +263,7 @@ int rudp_send(RUDP_Socket *sockfd, void *buffer, unsigned int buffer_size) {
 }
 
 
-int rudp_disconnect(RUDP_Socket *sockfd, void* buff, unsigned int buff_size) {
+int rudp_disconnect(RUDP_Socket *sockfd, char* buff, unsigned int buff_size) {
     if (sockfd->isConnected == 0) return 0;
     if (sockfd->isServer) {
         // Send FIN+ACK
@@ -289,13 +290,48 @@ int rudp_disconnect(RUDP_Socket *sockfd, void* buff, unsigned int buff_size) {
         }
 
         RUDP_Header * recv_h = (RUDP_Header*) buff;
-        if (recv_h->flags & ACK) return 1; else return 0;
-    } else {
+        if (recv_h->flags & ACK) {
+            sockfd->isConnected = 0;
+            return 1;} else return 0;
+    } else { // If it's client
+        int flag = 0;
+        while (flag != 1) {
         // Send FIN
+        RUDP_Header fin;
+        memset(&fin, 0, sizeof(fin));
+        fin.flags |= FIN;
 
+        int bytes_sent = sendto(sockfd->socket_fd, &fin, sizeof(fin), 0,(struct sockaddr*) &(sockfd->dest_adrr), sizeof(sockfd->dest_adrr));
+        if (bytes_sent < 0) {
+            perror("sendto(2)");
+            close(sockfd->socket_fd);
+            exit(1);
+        }
         // Wait for FIN+ACK from server
-
+        
+        
+        struct sockaddr_in recv_addr;
+        socklen_t recv_addr_s = sizeof(recv_addr);
+        int bytes_recv = recvfrom(sockfd->socket_fd, buff, buff_size, 0, (struct sockaddr*)&recv_addr, &recv_addr_s);
+        if (bytes_recv < 0) {
+            if (errno == EWOULDBLOCK || errno == EAGAIN) {                    
+                fprintf(stdout, "Timeout occured!!, Server didn't respond..\n");
+                } else {
+                perror("recvfrom(2)");
+                close(sockfd->socket_fd);
+                exit(1);
+            }
+        } else if (bytes_recv > 0) {
+            RUDP_Header* recv_h = (RUDP_Header*) buff;
+            if (recv_h->flags & (FIN|ACK)) {
+                flag = 1;
+            }
+        }
+        }
         // Send ACK
+        RUDP_sendACK(sockfd);
+        sockfd->isConnected = 0;
+        return 1;
     }
 }
 
@@ -322,6 +358,12 @@ int RUDP_sendACK(RUDP_Socket* sockfd) {
         close(sockfd->socket_fd);
         exit(1);
     }
+    return 1;
+}
+
+int rudp_close(RUDP_Socket *sockfd) {
+    close(sockfd->socket_fd);
+    free(sockfd);
     return 1;
 }
 
@@ -355,4 +397,15 @@ char *util_generate_random_data(unsigned int size) {
     for (unsigned int i = 0; i < size; i++)
     *(buffer + i) = ((unsigned int)rand() % 256);
     return buffer;
+}
+
+void timespec_substract(struct timespec *result, struct timespec *earlier, struct timespec *later) {
+    result->tv_sec = later->tv_sec - earlier->tv_sec;
+    if (later->tv_nsec >= earlier->tv_nsec) result->tv_nsec = later->tv_nsec - earlier->tv_nsec;
+    else result->tv_nsec = later->tv_nsec - earlier->tv_nsec + ((long)1e9);
+}
+
+double timespec_to_ms(struct timespec* target){
+    double ans = target->tv_sec*1e3 + target->tv_nsec*1e-6;
+    return ans;
 }
