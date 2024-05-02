@@ -1,13 +1,26 @@
 #include "RUDP_API.h"
 
-int main() {
+int main(int argc, char* argv[]) {
+
+    int server_port = 0;
+    if (argc != 5) {
+        printf("Error! Usage of program is '-ip' <IP> '-p' <PORT>\n");
+        return 1;
+    }
+    server_port = atoi(argv[4]);
+    if (server_port == 0) {
+        fprintf(stdout, "Error! port sytnax failure...\n");
+        return 1;
+    }
+
+
     char buffer[BUFF_SIZE] = {0};
 
     RUDP_Socket* sock = RUDP_Socket_alloc(0, 0, 5);
 
-    fprintf(stdout, "Connecting to server %s:%d..\n", SERVER_IP, SERVER_PORT);
+    fprintf(stdout, "Connecting to server %s:%d..\n", SERVER_IP, server_port);
     
-    if (rudp_connect(sock, SERVER_IP, SERVER_PORT, buffer, BUFF_SIZE) == 0 ) {
+    if (rudp_connect(sock, argv[2], server_port, buffer, BUFF_SIZE) == 0 ) {
         fprintf(stdout, "Failed connecting to server... exiting\n");
         rudp_close(sock);
         return 1;

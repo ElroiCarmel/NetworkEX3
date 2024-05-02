@@ -1,9 +1,21 @@
 #include "RUDP_API.h"
 
-int main() {
+int main(int argc, char *argv[]) {
+
+    if (argc != 3) {
+        printf("Error! Usage of program is '-p' <PORT>\n");
+        return 1;
+    }
+
+    int server_port = atoi(argv[2]);
+    if (server_port == 0) {
+        fprintf(stdout, "Error! port sytnax failure...\n");
+        return 1;
+    }
+
     char buffer[BUFF_SIZE] = {0};
     
-    RUDP_Socket* sock = RUDP_Socket_alloc(1, SERVER_PORT, 0);
+    RUDP_Socket* sock = RUDP_Socket_alloc(1, server_port, 0);
 
     fprintf(stdout, "Starting Receiver...\nWaiting for RUDP Connection..\n");
 
