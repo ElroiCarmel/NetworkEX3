@@ -16,9 +16,9 @@ int main(int argc, char* argv[]) {
 
     char buffer[BUFF_SIZE] = {0};
 
-    RUDP_Socket* sock = RUDP_Socket_alloc(0, 0, 5);
+    RUDP_Socket* sock = RUDP_Socket_alloc(0, 0, TO);
 
-    fprintf(stdout, "Connecting to server %s:%d..\n", SERVER_IP, server_port);
+    fprintf(stdout, "Connecting to server %s:%d..\n", argv[2], server_port);
     
     if (rudp_connect(sock, argv[2], server_port, buffer, BUFF_SIZE) == 0 ) {
         fprintf(stdout, "Failed connecting to server... exiting\n");

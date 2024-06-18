@@ -14,6 +14,7 @@
 #define MAX_DGRAM_SIZE 65507
 #define BUFF_SIZE 65600
 #define FILE_SIZE (1<<21)
+#define TO 2
 
 #define SERVER_PORT 5060
 #define SERVER_IP "127.0.0.1"
